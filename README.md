@@ -20,7 +20,7 @@
 - **参数微调**: 支持温度 (Temperature), Top-P, Top-K, 重复惩罚等完整生成参数控制。
 
 ## 📦 安装步骤
-
+注意轮子版本要为最新版本v0.3.30：https://github.com/JamePeng/llama-cpp-python/releases
 ### 1. 安装插件
 将本插件文件夹复制到 ComfyUI 的自定义节点目录：
 `ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN/`
@@ -34,6 +34,7 @@
 cd ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN
 
 pip install -r requirements.txt
+
 
 
 
