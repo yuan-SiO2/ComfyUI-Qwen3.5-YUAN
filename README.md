@@ -24,14 +24,16 @@
 ### 1. 安装插件
 将本插件文件夹复制到 ComfyUI 的自定义节点目录：
 `ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN/`
+
 模型存放路径：~ComfyUI\models\LLM 
 
 ### 2. 安装依赖 (重要)
 进入插件目录，运行以下命令安装必要的 Python 库：
 
 ```bash
-cd ComfyUI/custom_nodes/ComfyUI-Qwen3.5-llama-YUAN
+cd ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN
 
 pip install -r requirements.txt
+
 
 
