@@ -1,0 +1,11 @@
+# ComfyUI-Qwen3.5-YUAN 依赖列表
+
+# 核心推理引擎 (llama.cpp 的 Python 绑定)
+# 注意：安装此库通常需要编译器环境。
+# Windows 用户如果安装失败，建议尝试安装预编译 wheel:
+# pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124 (根据CUDA版本调整)
+llama-cpp-python>=0.2.90
+
+# 图像处理基础库 (ComfyUI 通常已自带，但为了保险起见列出)
+Pillow>=9.0.0
+numpy>=1.20.0
