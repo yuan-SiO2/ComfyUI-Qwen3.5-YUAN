@@ -25,8 +25,6 @@
 将本插件文件夹复制到 ComfyUI 的自定义节点目录：
 `ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN/`
 
-模型存放路径：~ComfyUI\models\LLM 
-
 ### 2. 安装依赖 (重要)
 进入插件目录，运行以下命令安装必要的 Python 库：
 
@@ -34,7 +32,14 @@
 cd ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN
 
 pip install -r requirements.txt
-
+```
+### 3. 准备模型文件
+你需要下载 GGUF 格式的主模型和对应的 mmproj (视觉投影) 文件。
+在 ComfyUI 根目录下创建文件夹：models/LLM/ (如果不存在)。
+完整路径示例：ComfyUI/models/LLM/
+将下载的 .gguf 主模型文件放入该文件夹。
+将下载的 mmproj 文件 (通常也是 .gguf 结尾) 放入该文件夹。
+模型来源推荐: HuggingFace 或 ModelScope 搜索 "Qwen3.5-VL GGUF"。
 
 
 
