@@ -1,5 +1,7 @@
 来源于B站：【Qwen3.5 图片反推提示词支持ComfyUI. 全新TE-llama反推节点高速版,再提速20%】https://www.bilibili.com/video/BV1viPvzJEha?vd_source=88bb58bee6e1773cd3c34354ab4ead37
+
 在此我修复了模型卸载后无法重新加载问题。
+
 # ComfyUI Qwen3.5 GGUF 本地图片推理插件 (Qwen VL)
 
 这是一个专为 ComfyUI 设计的自定义节点，用于在本地运行 **Qwen3-VL** 和 **Qwen3.5-VL** (GGUF 格式) 多模态大模型，实现图片理解、视频帧分析和视觉问答功能。
@@ -21,7 +23,8 @@
 
 ### 1. 安装插件
 将本插件文件夹复制到 ComfyUI 的自定义节点目录：
-`ComfyUI/custom_nodes/ComfyUI-Qwen3.5-llama-YUAN/`
+`ComfyUI/custom_nodes/ComfyUI-Qwen3.5-YUAN/`
+模型存放路径：~ComfyUI\models\LLM 
 
 ### 2. 安装依赖 (重要)
 进入插件目录，运行以下命令安装必要的 Python 库：
@@ -30,3 +33,5 @@
 cd ComfyUI/custom_nodes/ComfyUI-Qwen3.5-llama-YUAN
 
 pip install -r requirements.txt
+
+
