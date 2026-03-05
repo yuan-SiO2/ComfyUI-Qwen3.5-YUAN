@@ -45,7 +45,6 @@ def _确保_llm目录已注册() -> None:
         else:
             folder_paths.folder_names_and_paths[folder_name] = (paths, set(exts) | llm_exts)
     except Exception:
-        # 不阻断 ComfyUI 启动；后续节点会提示更具体错误
         return
 
 def _列出llm文件() -> list[str]:
@@ -56,10 +55,6 @@ def _列出llm文件() -> list[str]:
         return []
 
 def _图片转base64(image_tensor) -> str:
-    """
-    ComfyUI 的 IMAGE 是 float32 0..1，shape 通常为 [B,H,W,C]。
-    这里取第 1 张，并编码为 JPEG base64。
-    """
     if image_tensor is None:
         return ""
     img = image_tensor[0].cpu().numpy()
@@ -95,9 +90,6 @@ def _批量图片索引转base64(image_tensor, index: int, 最大边长: int) ->
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 def _调用chat_completion(llm, *, messages, params: dict) -> dict:
-    """
-    兼容不同 llama-cpp-python 版本的参数名差异（例如 presence_penalty vs present_penalty）。
-    """
     kwargs = dict(params or {})
     kwargs["messages"] = messages
     try:
@@ -141,11 +133,9 @@ class _QwenStorage:
         if Llama is None:
             raise RuntimeError("未检测到 llama-cpp-python（llama_cpp）。请先安装/更新该依赖。")
         
-        # 如果模型已加载且配置相同，直接返回
         if cls.model and cls.model.config == config:
             return cls.model
         
-        # 配置不同或无模型，先卸载旧的
         cls.unload()
         
         model_path = os.path.join(folder_paths.models_dir, "LLM", config["model"])
@@ -167,7 +157,6 @@ class _QwenStorage:
             if family == "Qwen3-VL":
                 if Qwen3VLChatHandler is None:
                     raise RuntimeError("当前 llama-cpp-python 不支持 Qwen3VLChatHandler，请更新 llama-cpp-python。")
-                # Qwen3 的 thinking 参数名在不同版本可能不同，这里做兜底。
                 try:
                     chat_handler = Qwen3VLChatHandler(clip_model_path=mmproj_path, force_reasoning=think, verbose=False)
                 except Exception:
@@ -186,10 +175,14 @@ class _QwenStorage:
                         verbose=False,
                     )
                 except TypeError:
-                    # 兼容少数版本的参数名差异
                     chat_handler = Qwen35ChatHandler(clip_model_path=mmproj_path, enable_thinking=think, verbose=False)
             else:
                 raise ValueError(f"未知模型家族：{family}")
+        else:
+            # 纯文本模式不需要 chat_handler，或者使用默认的 handler
+            # 注意：某些版本的 llama-cpp-python 加载多模态模型但不用 mmproj 时可能需要特殊处理
+            # 这里保持默认，让 Llama 类自己处理
+            pass
         
         n_ctx = int(config.get("n_ctx", 8192))
         n_gpu_layers = int(config.get("n_gpu_layers", -1))
@@ -253,7 +246,8 @@ class QwenVL图像推理:
         return {
             "required": {
                 "qwen模型": ("QWENLLAMA",),
-                "输入模式": (["图片", "逐帧", "视频"], {"default": "图片", "tooltip": "图片=只读第1张；逐帧=一张一张推理；视频=抽帧后一次性推理。"}),
+                # --- 修改点 1: 增加 "纯文本" 选项 ---
+                "输入模式": (["图片", "逐帧", "视频", "纯文本"], {"default": "图片", "tooltip": "图片=只读第1张；逐帧=一张一张推理；视频=抽帧后一次性推理；纯文本=仅文字聊天，无需图片输入。"}),
                 "提示词": ("STRING", {"default": "请描述这张图片。", "multiline": True}),
                 "系统提示词": ("STRING", {"default": "你是一个图片描绘师,用中文输出,不要输出除了图片描绘的内容。", "multiline": True}),
                 "最多帧数": ("INT", {"default": 24, "min": 2, "max": 1024, "step": 1, "tooltip": "视频模式下从输入图片序列中均匀抽取的帧数。"}),
@@ -295,42 +289,30 @@ class QwenVL图像推理:
         随机种子,
         图片=None,
     ):
-        # --- 智能自动重加载逻辑 (核心修复) ---
+        # --- 智能自动重加载逻辑 ---
         need_reload = False
         
-        # 情况1: 全局模型已被卸载 (为 None)
         if _QwenStorage.model is None:
             print("[QwenVL] 检测到模型已卸载，正在尝试自动重新加载...")
             need_reload = True
-        
-        # 情况2: 全局模型存在，但传入的对象引用与全局不一致
-        # 这通常发生在模型被卸载后，ComfyUI 仍传递了旧的对象引用壳子
         elif qwen模型 is not _QwenStorage.model:
             print("[QwenVL] 检测到模型对象引用失效，正在尝试同步最新模型...")
-            # 如果配置相同，直接使用全局最新的模型（可能其他节点刚加载过）
             if hasattr(qwen模型, 'config') and qwen模型.config == _QwenStorage.model.config:
                 qwen模型 = _QwenStorage.model
             else:
-                # 配置变了或者无法匹配，需要重新加载
                 need_reload = True
         
-        # 执行重新加载
         if need_reload:
             try:
-                # 确保传入的 qwen模型 有 config 属性
                 if not hasattr(qwen模型, 'config'):
                     raise RuntimeError("输入的模型对象缺少配置信息，无法自动重加载。请先运行加载器节点。")
-                
-                # 调用加载器逻辑重新加载
                 _QwenStorage.load(qwen模型.config)
-                # 更新本地引用指向新加载的全局模型
                 qwen模型 = _QwenStorage.model
                 print("[QwenVL] 模型自动重加载成功，开始推理。")
             except Exception as e:
                 raise RuntimeError(f"自动重新加载模型失败: {str(e)}。请检查模型文件是否存在，或手动运行 'QwenVL模型加载器' 节点。")
         # ----------------------------------
 
-        # 安全获取 llm 实例
         if not hasattr(qwen模型, 'llm') or qwen模型.llm is None:
              raise RuntimeError("模型对象内部 llm 实例无效，请检查模型文件完整性。")
              
@@ -338,26 +320,96 @@ class QwenVL图像推理:
         
         messages = []
         system_text = (系统提示词 or "").strip()
-        if 输入模式 == "视频" and system_text:
-            system_text = "请将输入的图片序列当做视频而不是静态帧序列, " + system_text
+        
+        # --- 修改点 2: 针对纯文本模式调整系统提示词 ---
+        if 输入模式 == "纯文本":
+            if not system_text:
+                system_text = "你是一个有用的AI助手。请用中文回答用户的问题。"
+            # 如果是纯文本，移除可能存在的“图片描绘师”等默认提示词的误导性，除非用户自定义了
+            # 这里保留用户自定义的系统提示词，不做强制覆盖，只在默认为空时给一个通用提示
+        else:
+            # 非纯文本模式，如果是视频，追加视频上下文提示
+            if 输入模式 == "视频" and system_text:
+                system_text = "请将输入的图片序列当做视频而不是静态帧序列, " + system_text
+        
         if system_text:
             messages.append({"role": "system", "content": system_text})
         
+        # --- 修改点 3: 处理图片输入逻辑 ---
         total_images = int(图片.shape[0]) if 图片 is not None else 0
-        if 输入模式 in ("图片", "逐帧", "视频") and total_images == 0:
-            raise ValueError("未检测到图片输入。")
+        
+        if 输入模式 == "纯文本":
+            # 纯文本模式：不需要图片，直接构建消息
+            if total_images > 0:
+                print("[QwenVL] 提示：当前为纯文本模式，将忽略输入的图片。")
             
-        if 输入模式 == "图片":
-            frame_indices = [0]
-        elif 输入模式 == "逐帧":
-            frame_indices = list(range(total_images))
-        else:  # 视频
-            if total_images == 1:
-                frame_indices = [0]
-            else:
-                count = min(max(int(最多帧数), 2), total_images)
-                frame_indices = np.linspace(0, total_images - 1, count, dtype=int).tolist()
+            prompt_text = (提示词 or "").strip()
+            if not prompt_text:
+                raise ValueError("纯文本模式下，提示词不能为空。")
                 
+            messages.append({"role": "user", "content": [{"type": "text", "text": prompt_text}]})
+            
+        elif 输入模式 in ("图片", "逐帧", "视频"):
+            # 原有图片逻辑
+            if total_images == 0:
+                raise ValueError(f"{输入模式}模式下未检测到图片输入。请连接 IMAGE 输入。")
+                
+            if 输入模式 == "图片":
+                frame_indices = [0]
+            elif 输入模式 == "逐帧":
+                frame_indices = list(range(total_images))
+            else:  # 视频
+                if total_images == 1:
+                    frame_indices = [0]
+                else:
+                    count = min(max(int(最多帧数), 2), total_images)
+                    frame_indices = np.linspace(0, total_images - 1, count, dtype=int).tolist()
+            
+            prompt_text = (提示词 or "").strip()
+            
+            if 输入模式 == "逐帧":
+                user_content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": {"url": ""}}]
+                messages.append({"role": "user", "content": user_content})
+                out_parts = []
+                for idx, frame_index in enumerate(frame_indices):
+                    if mm.processing_interrupted():
+                        raise mm.InterruptProcessingException()
+                    img_b64 = _批量图片索引转base64(图片, frame_index, int(最大边长))
+                    if not img_b64:
+                        continue
+                    user_content[1]["image_url"]["url"] = f"data:image/jpeg;base64,{img_b64}"
+                    out = _调用chat_completion(llm, messages=messages, params={
+                        "max_tokens": int(最大生成token), "temperature": float(温度), "top_p": float(top_p),
+                        "top_k": int(top_k), "repeat_penalty": float(重复惩罚),
+                        "frequency_penalty": float(频率惩罚), "presence_penalty": float(存在惩罚),
+                        "seed": int(随机种子), "stream": False, "stop": ["</s>"],
+                    })
+                    try:
+                        part = out["choices"][0]["message"]["content"]
+                    except Exception:
+                        part = str(out)
+                    if len(frame_indices) > 1:
+                        out_parts.append(f"====== 第{idx+1}帧 ======\n{part}".strip())
+                    else:
+                        out_parts.append(str(part).strip())
+                text = "\n\n".join([p for p in out_parts if p])
+                # 逐帧模式直接返回结果，不再执行后面的统一调用
+                if mm.processing_interrupted():
+                    raise mm.InterruptProcessingException()
+                return (text.lstrip().removeprefix(": ").strip(),)
+            else:
+                # 图片模式 或 视频模式 (非逐帧)
+                user_content = [{"type": "text", "text": prompt_text}]
+                for frame_index in frame_indices:
+                    img_b64 = _批量图片索引转base64(图片, frame_index, int(最大边长))
+                    if not img_b64:
+                        continue
+                    user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
+                messages.append({"role": "user", "content": user_content})
+        else:
+            raise ValueError(f"未知的输入模式：{输入模式}")
+
+        # 统一调用 (非逐帧模式)
         params = {
             "max_tokens": int(最大生成token),
             "temperature": float(温度),
@@ -371,43 +423,12 @@ class QwenVL图像推理:
             "stop": ["</s>"],
         }
         
-        prompt_text = (提示词 or "").strip()
-        
-        if 输入模式 == "逐帧":
-            user_content = [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": {"url": ""}}]
-            messages.append({"role": "user", "content": user_content})
-            out_parts = []
-            for idx, frame_index in enumerate(frame_indices):
-                if mm.processing_interrupted():
-                    raise mm.InterruptProcessingException()
-                img_b64 = _批量图片索引转base64(图片, frame_index, int(最大边长))
-                if not img_b64:
-                    continue
-                user_content[1]["image_url"]["url"] = f"data:image/jpeg;base64,{img_b64}"
-                out = _调用chat_completion(llm, messages=messages, params=params)
-                try:
-                    part = out["choices"][0]["message"]["content"]
-                except Exception:
-                    part = str(out)
-                if len(frame_indices) > 1:
-                    out_parts.append(f"====== 第{idx+1}帧 ======\n{part}".strip())
-                else:
-                    out_parts.append(str(part).strip())
-            text = "\n\n".join([p for p in out_parts if p])
-        else:
-            user_content = [{"type": "text", "text": prompt_text}]
-            for frame_index in frame_indices:
-                img_b64 = _批量图片索引转base64(图片, frame_index, int(最大边长))
-                if not img_b64:
-                    continue
-                user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
-            messages.append({"role": "user", "content": user_content})
-            out = _调用chat_completion(llm, messages=messages, params=params)
-            try:
-                text = out["choices"][0]["message"]["content"]
-            except Exception:
-                text = str(out)
-                
+        out = _调用chat_completion(llm, messages=messages, params=params)
+        try:
+            text = out["choices"][0]["message"]["content"]
+        except Exception:
+            text = str(out)
+            
         if mm.processing_interrupted():
             raise mm.InterruptProcessingException()
             
