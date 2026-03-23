@@ -222,7 +222,7 @@ class QwenVL模型加载器:
     RETURN_TYPES = ("QWENLLAMA",)
     RETURN_NAMES = ("qwen模型",)
     FUNCTION = "load"
-    CATEGORY = "Qwen VL"
+    CATEGORY = "YUAN_ALL"
 
     def load(self, 模型家族, 主模型, 视觉投影mmproj, 启用思考, 上下文长度, GPU层数):
         if 主模型.startswith("（请把模型放到"):
@@ -269,7 +269,7 @@ class QwenVL图像推理:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("文本",)
     FUNCTION = "run"
-    CATEGORY = "Qwen VL"
+    CATEGORY = "YUAN_ALL"
 
     def run(
         self,
@@ -442,7 +442,7 @@ class QwenVL卸载模型:
     RETURN_TYPES = (any_type,)
     RETURN_NAMES = ("任意输出",)
     FUNCTION = "run"
-    CATEGORY = "Qwen VL"
+    CATEGORY = "YUAN_ALL"
 
     def run(self, 任意输入):
         _QwenStorage.unload()
